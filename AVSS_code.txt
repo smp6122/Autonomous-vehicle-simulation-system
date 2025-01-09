@@ -1,0 +1,297 @@
+#include <iostream>
+#include <vector>
+#include <queue>
+#include <limits>
+#include <algorithm>
+#include <random>
+#include <memory>
+
+// Sensor base class
+class Sensor {
+public:
+    virtual ~Sensor() {}
+    virtual double getDistance() const = 0;
+    virtual std::string getType() const = 0;
+};
+
+// Random number generator setup
+std::random_device rd;
+std::mt19937 gen(rd());
+
+// Ultrasonic sensor subclass
+class UltrasonicSensor : public Sensor {
+public:
+    double getDistance() const override {
+        std::uniform_real_distribution<> dis(1.0, 5.0); // Random distance between 1 and 5
+        return dis(gen);
+    }
+
+    std::string getType() const override {
+        return "Ultrasonic";
+    }
+};
+
+// Exception class for sensor failure
+class SensorFailureException : public std::exception {
+public:
+    const char* what() const noexcept override {
+        return "Sensor failure detected!";
+    }
+};
+
+// Vehicle class
+class Vehicle {
+private:
+    std::vector<std::shared_ptr<Sensor>> sensors;
+    double speed;
+    bool running;
+    std::pair<int, int> position;
+    std::vector<std::pair<int, int>> obstacles;
+
+public:
+    Vehicle() : speed(0), running(true), position({0, 0}) {}
+
+    void addSensor(const std::shared_ptr<Sensor>& sensor) {
+        sensors.push_back(sensor);
+    }
+
+    void setSpeed(double s) {
+        speed = s;
+    }
+
+    double getSpeed() const {
+        return speed;
+    }
+
+    void setPosition(const std::pair<int, int>& pos) {
+        position = pos;
+    }
+
+    std::pair<int, int> getPosition() const {
+        return position;
+    }
+
+    void setObstacles(const std::vector<std::pair<int, int>>& obs) {
+        obstacles = obs;
+    }
+
+    void move() {
+        // Simulate movement
+        std::cout << "Reached waypoint: (" << position.first << ", " << position.second 
+                  << ") with current speed of " << speed << " km/h\n\n"; // Added newline for readability
+    }
+
+    void slowDown(const std::pair<int, int>& nearestObstacle) {
+        speed *= 0.5; // Reduce speed by half
+        std::cout << "Slowing down due to obstacle at (" << nearestObstacle.first << ", " << nearestObstacle.second 
+                  << "), new speed: " << speed << " km/h\n";
+    }
+
+    void avoidObstacles() {
+        std::pair<int, int> nearestObstacle = findNearestObstacle();
+        if (nearestObstacle == std::make_pair(-1, -1)) {
+            // No valid obstacle detected, proceed to next waypoint
+            incrementSpeed();
+            return;
+        }
+
+        double obstacleDistance = std::sqrt(std::pow(position.first - nearestObstacle.first, 2) + std::pow(position.second - nearestObstacle.second, 2));
+        std::cout << "Distance to nearest obstacle at (" << nearestObstacle.first << ", " << nearestObstacle.second << "): " << obstacleDistance << "\n";
+
+        if (obstacleDistance < 3.0) {
+            for (const auto& sensor : sensors) {
+                double distance = sensor->getDistance();
+                std::cout << sensor->getType() << " sensor reading: " << distance << " for obstacle at (" << nearestObstacle.first << ", " << nearestObstacle.second << ")\n";
+            }
+            emergencyStop(nearestObstacle);
+        } else if (obstacleDistance < 6.0) {
+            for (const auto& sensor : sensors) {
+                double distance = sensor->getDistance();
+                std::cout << sensor->getType() << " sensor reading: " << distance << " for obstacle at (" << nearestObstacle.first << ", " << nearestObstacle.second << ")\n";
+            }
+            slowDown(nearestObstacle);
+        } else {
+            incrementSpeed();
+        }
+    }
+
+    std::pair<int, int> findNearestObstacle() {
+        std::pair<int, int> nearestObstacle = {-1, -1};
+        double minDistance = std::numeric_limits<double>::max();
+        for (const auto& obs : obstacles) {
+            double distance = std::sqrt(std::pow(position.first - obs.first, 2) + std::pow(position.second - obs.second, 2));
+            if (distance < minDistance) {
+                minDistance = distance;
+                nearestObstacle = obs;
+            }
+        }
+        return nearestObstacle;
+    }
+
+    void emergencyStop(const std::pair<int, int>& nearestObstacle) {
+        speed = 0;
+        running = false;
+        std::cout << "Emergency stop due to obstacle at (" << nearestObstacle.first << ", " << nearestObstacle.second 
+                  << ")! Terminating the simulation.\n";
+        std::exit(0); // Terminate the program
+    }
+
+    void incrementSpeed() {
+        speed += 5.0; // Increase speed by 5 km/h if no obstacles are detected
+        std::cout << "No nearby obstacles. Speed increased to " << speed << " km/h\n";
+    }
+
+    void stop() {
+        speed = 0;
+        running = false;
+        std::cout << "Vehicle has reached the final waypoint and has stopped.\n";
+    }
+
+    bool isRunning() const {
+        return running;
+    }
+};
+
+// Node structure for Dijkstra's algorithm
+struct Node {
+    int x, y;
+    double cost;
+    bool operator>(const Node& other) const {
+        return cost > other.cost;
+    }
+};
+
+// Pathfinding class with Dijkstra's algorithm
+class Pathfinding {
+public:
+    std::vector<std::pair<int, int>> findPath(const std::pair<int, int>& start, const std::pair<int, int>& end, const std::vector<std::vector<double>>& grid) {
+        int width = grid.size();
+        int height = grid[0].size();
+        std::vector<std::vector<double>> distance(width, std::vector<double>(height, std::numeric_limits<double>::max()));
+        std::vector<std::vector<std::pair<int, int>>> previous(width, std::vector<std::pair<int, int>>(height, {-1, -1}));
+
+        std::priority_queue<Node, std::vector<Node>, std::greater<Node>> pq;
+        pq.push({start.first, start.second, 0});
+        distance[start.first][start.second] = 0;
+
+        std::vector<std::pair<int, int>> directions = {{0, 1}, {1, 0}, {0, -1}, {-1, 0}};
+
+        while (!pq.empty()) {
+            Node current = pq.top();
+            pq.pop();
+
+            if (current.x == end.first && current.y == end.second) break;
+
+            for (const auto& dir : directions) {
+                int nx = current.x + dir.first;
+                int ny = current.y + dir.second;
+                if (nx >= 0 && ny >= 0 && nx < width && ny < height) {
+                    double new_cost = distance[current.x][current.y] + grid[nx][ny];
+                    if (new_cost < distance[nx][ny]) {
+                        distance[nx][ny] = new_cost;
+                        pq.push({nx, ny, new_cost});
+                        previous[nx][ny] = {current.x, current.y};
+                    }
+                }
+            }
+        }
+
+        std::vector<std::pair<int, int>> path;
+        for (std::pair<int, int> at = end; at != start; at = previous[at.first][at.second]) {
+            path.push_back(at);
+        }
+        path.push_back(start);
+        std::reverse(path.begin(), path.end());
+        return path;
+    }
+
+    std::vector<std::vector<double>> generateGrid(int width, int height) {
+        std::vector<std::vector<double>> grid(width, std::vector<double>(height, 1.0)); // Initial cost of 1 for each cell
+        return grid;
+    }
+
+    std::vector<std::pair<int, int>> generateObstacles(int width, int height, const std::pair<int, int>& start, const std::pair<int, int>& end) {
+        std::uniform_int_distribution<> countDis(5, 15); // Random number of obstacles between 5 and 15
+        int obstacleCount = countDis(gen);
+        
+        std::uniform_int_distribution<> coordinateDis(1, std::min(width, height) - 1); // Random coordinates range
+        std::vector<std::pair<int, int>> obstacles;
+        for (int i = 0; i < obstacleCount; ++i) {
+            std::pair<int, int> obstacle;
+            do {
+                obstacle = {coordinateDis(gen), coordinateDis(gen)};
+            } while (obstacle == start || obstacle == end); // Ensure obstacles are not placed at start or end
+            obstacles.push_back(obstacle);
+        }
+        return obstacles;
+    }
+};
+
+// Main function
+int main() {
+    try {
+        Vehicle vehicle;
+        std::shared_ptr<UltrasonicSensor> us = std::make_shared<UltrasonicSensor>();
+
+        vehicle.addSensor(us);
+
+        std::pair<int, int> start, end;
+        std::cout << "Enter starting coordinates (x y): ";
+        std::cin >> start.first >> start.second;
+        std::cout << "Enter ending coordinates (x y): ";
+        std::cin >> end.first >> end.second;
+
+        // Determine the grid size based on the user input
+        int grid_width = std::max(start.first, end.first) + 1;
+        int grid_height = std::max(start.second, end.second) + 1;
+
+        Pathfinding pathfinding;
+        auto grid = pathfinding.generateGrid(grid_width, grid_height); // Dynamic grid size
+
+        std::vector<std::pair<int, int>> path = pathfinding.findPath(start, end, grid);
+        std::vector<std::pair<int, int>> obstacles = pathfinding.generateObstacles(grid_width, grid_height, start, end);
+        vehicle.setObstacles(obstacles);
+
+        std::cout << "Starting simulation..." << std::endl;
+        std::cout << "Path from (" << start.first << ", " << start.second << ") to ("
+                  << end.first << ", " << end.second << "):" << std::endl;
+
+        for (const auto& waypoint : path) {
+            std::cout << "(" << waypoint.first << ", " << waypoint.second << ")\n";
+        }
+
+        std::cout << "Generated obstacles:" << std::endl;
+        for (const auto& obstacle : obstacles) {
+            std::cout << "(" << obstacle.first << ", " << obstacle.second << ")\n";
+        }
+
+        vehicle.setSpeed(10.0); // Set initial speed
+
+        // Move the vehicle along the path
+        std::cout << "Starting from (" << start.first << ", " << start.second << ")\n";
+        for (size_t i = 1; i < path.size(); ++i) { // Start from the second waypoint
+            if (!vehicle.isRunning()) {
+                break;
+            }
+
+            vehicle.setPosition(path[i]);
+            vehicle.avoidObstacles(); // Check for obstacles and adjust speed accordingly
+
+            if (vehicle.isRunning()) {
+                vehicle.move(); // Move the vehicle to the next waypoint
+            }
+        }
+
+        // Stop the vehicle at the final waypoint
+        vehicle.stop();
+
+    } catch (const SensorFailureException& e) {
+        std::cerr << e.what() << std::endl;
+        return EXIT_FAILURE;
+    } catch (const std::exception& e) {
+        std::cerr << "Exception: " << e.what() << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;
+}

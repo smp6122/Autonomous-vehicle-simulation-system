@@ -1,0 +1,25 @@
+### Overview
+The provided code simulates a vehicle navigating through a grid while avoiding obstacles using sensors. 
+Here’s a step-by-step explanation of how it works:
+
+1. **Sensor Class**: This is an abstract base class for sensor types. It declares two pure virtual functions: `getDistance()` and `getType()`.
+
+2. **UltrasonicSensor Class**: This is a subclass of `Sensor` that overrides `getDistance()` and `getType()`. It uses a random number generator to simulate the sensor reading distances between 1 and 5 units.
+
+3. **Vehicle Class**: The `Vehicle` class contains methods to add sensors, set speed and position, check for and avoid obstacles, and move the vehicle. 
+It uses a sensor to monitor its surroundings and adjust its speed or stop to avoid collisions.
+
+4. **Pathfinding Class**: Implements Dijkstra’s algorithm to find the shortest path from a start to an end point on a grid. It also generates obstacles on the grid.
+
+5. **Main Function**: 
+    - Creates a `Vehicle` object and adds an ultrasonic sensor to it.
+    - Takes starting and ending coordinates from the user.
+    - Creates a grid and generates a path using the `Pathfinding` class.
+    - Simulates the movement of the vehicle along the generated path, checking for obstacles and adjusting the speed or stopping as needed.
+
+Key Highlights
+
+- **Obstacle Avoidance**: The vehicle uses sensors to detect obstacles. If an obstacle is detected within a certain distance, it slows down or performs an emergency stop.
+- **Pathfinding**: The vehicle calculates a path from the start to the end point using Dijkstra’s algorithm.
+- **Dynamic Grid**: The grid size is dynamically determined based on user input for start and end coordinates.
+- **Error Handling**: The program includes exception handling for sensor failures and other standard exceptions.
